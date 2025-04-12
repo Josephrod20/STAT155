@@ -1,0 +1,44 @@
+---
+title: "Quarto_intro"
+author: "Joseph"
+date: 'April 4, 2025'
+format: md
+execute:
+  python: "/usr/local/bin/python3" 
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.\
+\
+For example this is a Quarto Document you can customize how your text appears here are some examples:
+
+-   **This is Bold Text.**
+
+-   *This is Italic Text*
+
+-   [This is Underline Text]{.underline}
+
+I also included bullet points.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{python}
+#| label: fig-plot
+#| fig-cap: "A Python Plot"
+import matplotlib.pyplot as plt
+plt.plot([1, 2, 3], [4, 5, 1])
+plt.show()
+```
+
+You can add options to executable code like this
+
+```{r}
+#| echo: false
+2 * 2
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
