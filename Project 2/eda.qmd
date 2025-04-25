@@ -1,0 +1,118 @@
+---
+title: "EDA: Mortgage Lending Patterns Across U.S. Regions"
+format: html
+editor: visual
+---
+
+## Introduction
+
+This exploratory analysis investigates potential regional and demographic patterns in U.S. mortgage approvals using a sample of the 2023 HMDA dataset. Our aim is to identify whether there are observable disparities—possibly indicating digital redlining—across the **West Coast (CA)**, **East Coast (NY)**, and the **South (GA)**. I focused on loan-level characteristics and demographic features and will prepare for a model-based clustering analysis.
+
+------------------------------------------------------------------------
+
+## Data Setup
+
+```{r}
+#| message: false
+library(tidyverse)
+
+# Load the data
+hmda <- read_csv("HMDA_clean.csv")
+
+# Filter relevant states
+target_states <- c("CA", "NY", "GA")
+
+# Subset to relevant columns and filter for the three regions
+hmda_sub <- hmda %>%
+  filter(state_code %in% target_states) %>%
+  select(state_code, loan_amount, income, approved,
+         derived_race, derived_sex, derived_ethnicity,
+         tract_minority_population_percent, tract_to_msa_income_percentage) %>%
+  drop_na()
+
+# Create a region variable
+hmda_sub <- hmda_sub %>%
+  mutate(region = case_when(
+    state_code == "CA" ~ "West",
+    state_code == "NY" ~ "East",
+    state_code == "GA" ~ "South"
+  ))
+```
+
+------------------------------------------------------------------------
+
+## Univariate EDA
+
+***Because both income and loan amounts are highly skewed, I need to visualize them on a log scale to better illustrate differences across applicants.***
+
+```{r}
+# Loan Amount
+ggplot(hmda_sub, aes(x = loan_amount)) +
+  geom_histogram(bins = 50, fill = "#1f77b4") +
+  scale_x_log10() +
+  labs(title = "Distribution of Loan Amounts (Log Scale)", 
+       x = "Loan Amount (log10)", y = "Count")
+
+# Income
+ggplot(hmda_sub, aes(x = income)) +
+  geom_histogram(bins = 50, fill = "#2ca02c") +
+  scale_x_log10() +
+  labs(
+    title = "Distribution of Income (Log Scale)", 
+    x = "Income (log10)", y = "Count")
+
+# Approval Rate
+hmda_sub %>%
+  count(approved) %>%
+  mutate(rate = n / sum(n)) %>%
+  ggplot(aes(x = factor(approved), y = rate)) +
+  geom_col(fill = "#ff7f0e") +
+  labs(title = "Approval Rate", x = "Approved (1 = Yes)", y = "Proportion")
+```
+
+------------------------------------------------------------------------
+
+## Bivariate EDA
+
+```{r}
+# Loan Amount by Race
+ggplot(hmda_sub, aes(x = derived_race, y = loan_amount)) +
+  geom_boxplot() +
+  labs(title = "Loan Amount by Race", x = "Race", y = "Loan Amount")
+
+# Approval Rate by Region
+hmda_sub %>%
+  group_by(region) %>%
+  summarise(approval_rate = mean(approved)) %>%
+  ggplot(aes(x = region, y = approval_rate, fill = region)) +
+  geom_col() +
+  labs(title = "Approval Rate by Region", x = "Region", y = "Approval Rate")
+```
+
+------------------------------------------------------------------------
+
+## Multivariate Relationships
+
+```{r}
+# Loan Amount vs Income colored by approval
+ggplot(hmda_sub, aes(x = income, y = loan_amount, color = factor(approved))) +
+  geom_point(alpha = 0.5) +
+  labs(title = "Loan Amount vs Income by Approval", color = "Approved")
+
+# Minority population percent by approval
+ggplot(hmda_sub, aes(x = tract_minority_population_percent, fill = factor(approved))) +
+  geom_histogram(position = "identity", alpha = 0.6, bins = 40) +
+  labs(title = "Tract Minority % by Approval Status", x = "Minority Population %", fill = "Approved")
+```
+
+------------------------------------------------------------------------
+
+## Clustering Motivation
+
+From the visual analysis above, I see suggestive patterns involving **income**, **loan amount**, **approval**, and **demographics** (especially race and minority neighborhood composition). For my midterm, I will apply **model-based clustering** using variables such as:
+
+-   `loan_amount`, `income`
+-   `tract_minority_population_percent`
+-   `approval` (for validation only)
+
+to investigate whether **unobserved clusters** align with protected class variables—possibly indicating algorithmic bias or digital redlining.
