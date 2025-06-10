@@ -1,6 +1,6 @@
 ---
 title: "EDA: Mortgage Lending Patterns Across U.S. Regions"
-format: html
+format: pdf
 editor: visual
 ---
 
@@ -42,6 +42,55 @@ hmda_sub <- hmda_sub %>%
 ------------------------------------------------------------------------
 
 ## Univariate EDA
+
+## Additional Variable Distributions
+
+### Race Distribution
+
+```{r}
+ggplot(hmda_sub, aes(x = derived_race)) +
+  geom_bar(fill = "steelblue") +
+  theme_minimal() +
+  labs(title = "Distribution of Race", x = "Race", y = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+*The dataset is dominated by White applicants, with notable representation of Asian and Black or African American applicants. A substantial number of applications lack reported race information ("Race Not Available"). Smaller minority groups, such as American Indian/Alaska Native and Native Hawaiian/Pacific Islander, are underrepresented in the data.*
+
+### Sex Distribution
+
+```{r}
+ggplot(hmda_sub, aes(x = derived_sex)) +
+  geom_bar(fill = "darkgreen") +
+  theme_minimal() +
+  labs(title = "Distribution of Sex", x = "Sex", y = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+*The dataset contains roughly equal proportions of male and joint applicants, with slightly fewer female applicants. A substantial number of records also fall under "Sex Not Available," indicating some missing or unreported gender data.*
+
+### Ethnicity Distribution
+
+```{r}
+ggplot(hmda_sub, aes(x = derived_ethnicity)) +
+  geom_bar(fill = "purple") +
+  theme_minimal() +
+  labs(title = "Distribution of Ethnicity", x = "Ethnicity", y = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+*Most applicants identify as "Not Hispanic or Latino." There is a meaningful presence of "Hispanic or Latino" applicants, as well as a large number of records where ethnicity is "Not Available," which may affect analysis of potential ethnicity-based disparities.*
+
+### Region Distribution (Counts)
+
+```{r}
+ggplot(hmda_sub, aes(x = region)) +
+  geom_bar(fill = "orange") +
+  theme_minimal() +
+  labs(title = "Distribution of Region", x = "Region", y = "Count")
+```
+
+*The dataset includes a disproportionately larger number of applications from the West (California), compared to the East (New York) and South (Georgia). This imbalance reflects both differences in population size and potentially differing volumes of mortgage activity across regions.*
 
 ***Because both income and loan amounts are highly skewed, I need to visualize them on a log scale to better illustrate differences across applicants.***
 
@@ -104,15 +153,3 @@ ggplot(hmda_sub, aes(x = tract_minority_population_percent, fill = factor(approv
   geom_histogram(position = "identity", alpha = 0.6, bins = 40) +
   labs(title = "Tract Minority % by Approval Status", x = "Minority Population %", fill = "Approved")
 ```
-
-------------------------------------------------------------------------
-
-## Clustering Motivation
-
-From the visual analysis above, I see suggestive patterns involving **income**, **loan amount**, **approval**, and **demographics** (especially race and minority neighborhood composition). For my midterm, I will apply **model-based clustering** using variables such as:
-
--   `loan_amount`, `income`
--   `tract_minority_population_percent`
--   `approval` (for validation only)
-
-to investigate whether **unobserved clusters** align with protected class variables—possibly indicating algorithmic bias or digital redlining.
