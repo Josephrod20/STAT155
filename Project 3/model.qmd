@@ -1,0 +1,245 @@
+---
+title: "Project 3"
+author: "Joseph Rodriguez"
+format: html
+editor: visual
+---
+
+## Introduction and Data
+
+This project explores potential regional and demographic disparities in U.S. mortgage lending using the 2023 HMDA dataset. We focus on **California (West)**, **New York (East)**, and **Georgia (South)**, examining if applicants face different **approval odds** even after accounting for loan and income characteristics.
+
+:::: cell
+``` {.r .cell-code}
+library(tidyverse)
+hmda <- read_csv("../Project1/data/HMDA_clean.csv") |> clean_names()
+```
+
+::: {.cell-output .cell-output-stderr}
+```         
+Rows: 3134392 Columns: 100
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+chr (29): lei, state_code, county_code, census_tract, conforming_loan_limit,...
+dbl (60): activity_year, derived_msa-md, action_taken, purchaser_type, preap...
+lgl (11): applicant_ethnicity-3, applicant_ethnicity-4, applicant_ethnicity-...
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+```
+:::
+
+``` {.r .cell-code}
+target_states <- c("CA", "NY", "GA")
+
+hmda_sub <- hmda |> 
+  filter(state_code %in% target_states) |> 
+  select(state_code, loan_amount, income, approved,
+         derived_race, derived_sex, derived_ethnicity,
+         tract_minority_population_percent,
+         tract_to_msa_income_percentage) |> 
+  drop_na() |> 
+  mutate(region = case_when(
+    state_code == "CA" ~ "West",
+    state_code == "NY" ~ "East",
+    state_code == "GA" ~ "South"
+  ))
+```
+::::
+
+### Exploratory Data Analysis
+
+::::::::: cell
+``` {.r .cell-code}
+# Distribution of Loan Amount (log scale)
+ggplot(hmda_sub, aes(x = loan_amount)) +
+  geom_histogram(bins = 50, fill = "#1f77b4") +
+  scale_x_log10() +
+  labs(title = "Loan Amounts (log10 scale)", x = "Loan Amount", y = "Count")
+```
+
+::: cell-output-display
+![](project3_FINAL_WITH_CAPTIONS_files/figure-html/eda-1.png){width="672"}
+:::
+
+``` {.r .cell-code}
+# Distribution of Income (log scale)
+ggplot(hmda_sub, aes(x = income)) +
+  geom_histogram(bins = 50, fill = "#2ca02c") +
+  scale_x_log10() +
+  labs(title = "Income (log10 scale)", x = "Income", y = "Count")
+```
+
+::: {.cell-output .cell-output-stderr}
+```         
+Warning in transformation$transform(x): NaNs produced
+```
+:::
+
+::: {.cell-output .cell-output-stderr}
+```         
+Warning in scale_x_log10(): log-10 transformation introduced infinite values.
+```
+:::
+
+::: {.cell-output .cell-output-stderr}
+```         
+Warning: Removed 10635 rows containing non-finite outside the scale range
+(`stat_bin()`).
+```
+:::
+
+::: cell-output-display
+![](project3_FINAL_WITH_CAPTIONS_files/figure-html/eda-2.png){width="672"}
+:::
+
+``` {.r .cell-code}
+# Approval Rates by Region
+hmda_sub |> 
+  group_by(region) |> 
+  summarise(approval_rate = mean(approved)) |> 
+  ggplot(aes(x = region, y = approval_rate, fill = region)) +
+  geom_col() +
+  labs(title = "Approval Rate by Region", x = "Region", y = "Approval Rate")
+```
+
+::: cell-output-display
+![](project3_FINAL_WITH_CAPTIONS_files/figure-html/eda-3.png){width="672"}
+:::
+:::::::::
+
+## Methodology
+
+We fit a **logistic regression model** to estimate the probability of approval (`approved = 1`) using predictors including loan size, income, regional and racial variables, and neighborhood characteristics.
+
+This model is suitable because the response is binary, and we aim to quantify marginal effects after adjustment.
+
+:::: cell
+``` {.r .cell-code}
+hmda_sub <- hmda_sub |> 
+  filter(loan_amount > 0, income > 0)
+model <- glm(approved ~ log(loan_amount) + log(income) +
+               tract_minority_population_percent +
+               region + derived_race,
+             data = hmda_sub,
+             family = binomial)
+
+# Show exponentiated coefficients for interpretability
+tidy(model, exponentiate = TRUE, conf.int = TRUE)
+```
+
+::: {.cell-output .cell-output-stdout}
+```         
+# A tibble: 14 × 7
+   term                estimate std.error statistic   p.value conf.low conf.high
+   <chr>                  <dbl>     <dbl>     <dbl>     <dbl>    <dbl>     <dbl>
+ 1 (Intercept)          0.00192  0.0502     -124.   0          0.00174   0.00212
+ 2 log(loan_amount)     1.44     0.00266     138.   0          1.44      1.45   
+ 3 log(income)          1.57     0.00380     119.   0          1.56      1.59   
+ 4 tract_minority_pop…  0.997    0.000105    -27.6  3.14e-168  0.997     0.997  
+ 5 regionSouth          1.12     0.00727      16.2  1.08e- 58  1.11      1.14   
+ 6 regionWest           0.883    0.00670     -18.5  8.27e- 77  0.872     0.895  
+ 7 derived_raceAmeric…  1.21     0.0483        4.00 6.25e-  5  1.10      1.33   
+ 8 derived_raceAsian    2.05     0.0405       17.7  1.78e- 70  1.90      2.22   
+ 9 derived_raceBlack …  1.34     0.0407        7.21 5.61e- 13  1.24      1.45   
+10 derived_raceFree F…  0.755    0.102        -2.75 6.04e-  3  0.618     0.922  
+11 derived_raceJoint    2.56     0.0433       21.7  9.09e-105  2.36      2.79   
+12 derived_raceNative…  1.20     0.0558        3.33 8.60e-  4  1.08      1.34   
+13 derived_raceRace N…  1.71     0.0402       13.3  1.27e- 40  1.58      1.85   
+14 derived_raceWhite    2.57     0.0401       23.6  4.90e-123  2.38      2.78   
+```
+:::
+::::
+
+## Model Interpretation
+
+This logistic regression model gives a pretty clear picture: even after accounting for financial qualifications (loan amount, income) and neighborhood characteristics, both **region** and **race** still have a noticeable impact on the likelihood of mortgage approval.
+
+### Baseline Groups
+
+For interpretation: - **Region baseline:** East (New York) - **Race baseline:** "Two or more minority races"\
+
+Region Effects
+
+-   Applicants in the **South** (Georgia) have about **12% higher odds** of getting approved compared to the East baseline.
+-   Applicants in the **West** (California) have about **12% lower odds** than the East baseline.
+
+So even after adjusting for income and loan size, there are still systematic differences across regions. Some of this could be due to regional lending practices or market factors, but the fact that it persists after controlling for the big financial variables is important.
+
+### Race Effects
+
+The model also shows large differences across racial groups:
+
+-   **White applicants** have **157% higher odds** of approval relative to the baseline group.
+-   **Asian applicants** see a **105% increase** in approval odds.
+-   **Black applicants** have **34% higher odds** a positive effect but much smaller than for White or Asian applicants.
+-   **Native Hawaiian or Other Pacific Islander** applicants show about a **20% increase**.
+-   The "Free Form Text Only" group faces a **25% lower odds** of approval.
+
+In other words after controlling for the financial and neighborhood variables in the model, **race still matters a lot** for approval outcomes. The fact that White and Asian applicants do so much better than other groups is a clear signal that disparities exist in the system.
+
+### Neighborhood Minority Composition
+
+The **tract minority population percentage** also has a small but significant negative effect: For every **1% increase** in minority population in the neighborhood, the odds of approval **drop by about 0.3%**. - On its own that’s a small number, but it adds up in a neighborhood that’s 50% more minority than another, you’re looking at an estimated \~15% lower odds of approval, all else equal.
+
+### Takeaways
+
+Big picture: income and loan size are doing what we’d expect higher values lead to higher approval odds.\
+But **region and race clearly matter in ways that are hard to explain by financials alone**, and neighborhood composition adds another layer of disparity.
+
+This suggests that **systemic biases in the approval process may still be at play**, whether through policy, practice, or broader structural inequities. These are important patterns to be aware of and would merit further investigation if this were an operational model being used in practice.
+
+### Summary of Key Findings
+
+The logistic regression model highlights several important findings:
+
+-   **Financial variables** behave as expected: higher income and larger loan amounts are associated with increased odds of mortgage approval.
+-   **Regional disparities** remain evident after adjustment: applicants in the South show higher approval odds relative to the East, while applicants in the West face lower odds.
+-   **Racial disparities** are pronounced: White and Asian applicants see substantially higher approval odds compared to the baseline, while other groups exhibit varying degrees of disadvantage or advantage.
+-   **Neighborhood composition** matters: higher minority population percentages in a neighborhood are linked to slightly lower approval odds, suggesting a potential geographic component to lending bias.
+
+These results reinforce the need to carefully consider both individual-level and contextual factors when evaluating fairness in mortgage approval processes.
+
+:::: cell
+``` {.r .cell-code}
+glance(model)
+```
+
+::: {.cell-output .cell-output-stdout}
+```         
+# A tibble: 1 × 8
+  null.deviance df.null   logLik     AIC     BIC deviance df.residual   nobs
+          <dbl>   <int>    <dbl>   <dbl>   <dbl>    <dbl>       <int>  <int>
+1      1065179.  894697 -493281. 986590. 986754.  986562.      894684 894698
+```
+:::
+::::
+
+## Results
+
+### Summary of Key Findings
+
+The logistic regression model highlights several important findings:
+
+-   **Financial variables** behave as expected: higher income and larger loan amounts are associated with increased odds of mortgage approval.
+-   **Regional disparities** remain evident after adjustment:
+    -   Applicants in the **South** (Georgia) have about **12% higher odds** of approval relative to the East.
+    -   Applicants in the **West** (California) have about **12% lower odds** of approval.
+-   **Racial disparities** are pronounced:
+    -   **White applicants** see **157% higher odds** of approval.
+    -   **Asian applicants** see **105% higher odds**.
+    -   **Black applicants** see **34% higher odds**.
+    -   **Native Hawaiian or Pacific Islander** applicants see **20% higher odds**.
+    -   Applicants with "Free Form Text Only" face **\~25% lower odds** of approval.
+-   **Neighborhood composition** matters:
+    -   For each **1% increase** in minority population in the neighborhood, the odds of approval **decrease by \~0.3%**.
+
+These results indicate that even after adjusting for financial characteristics, both race and region exert strong, systematic effects on approval outcomes — consistent with potential bias.
+
+## Conclusion and Limitations
+
+This analysis demonstrates that both race and region continue to influence mortgage approval outcomes even after controlling for financial characteristics and neighborhood demographics. The substantial advantages observed for White and Asian applicants, and the disadvantages linked to minority neighborhoods, raise important concerns about potential systemic biases in lending practices.
+
+Limitations of this analysis include: - The available dataset may not capture all relevant applicant characteristics (e.g., credit scores, loan-to-value ratios). - The definition of race and ethnicity relies on self-reported or institution-reported categories that may be incomplete. - The study focuses on three regions and may not fully generalize to the entire U.S. mortgage market.
+
+Future work could extend this analysis to more regions and incorporate additional applicant-level and lender-level variables to deepen the understanding of potential biases in mortgage approval processes.
